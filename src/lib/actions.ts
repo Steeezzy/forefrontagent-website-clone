@@ -43,15 +43,48 @@ async function bookAppointment(bot: any, conv: any, args: { service: string; dat
     return { ok: true, booking_id: id, service: args.service, date: args.date, time: args.time ?? null };
 }
 
+import { eq } from "drizzle-orm";
+import { integrations } from "@/db/schema";
+
 async function lookupOrder(bot: any, args: { order_id: string }) {
     if (!args?.order_id) throw new Error("order_id required");
-    // TODO: Fetch Shopify credentials from integrations table and call Shopify Admin API
-    // Replace with actual fetch:
-    // const shopToken = await getIntegrationToken(bot.id, 'shopify');
-    // return fetchShopifyOrder(shopToken, args.order_id)
 
-    // Stub response:
-    return { ok: true, order: { id: args.order_id, status: "processing", total: "₹1234.00" } };
+    // Fetch Shopify credentials
+    const integration = await db.query.integrations.findFirst({
+        where: eq(integrations.botId, parseInt(bot.id))
+    });
+
+    if (!integration || integration.type !== 'shopify' || !integration.credentialsEncrypted) {
+        console.warn("No Shopify integration found for bot", bot.id);
+        return { ok: false, error: "Shopify integration not configured" };
+    }
+
+    // Decrypt token (simple base64 decode for MVP)
+    const accessToken = Buffer.from(integration.credentialsEncrypted, 'base64').toString('utf-8');
+    const shop = (integration.config as any)?.shop;
+
+    if (!shop) {
+        return { ok: false, error: "Shopify shop domain missing in config" };
+    }
+
+    try {
+        const response = await fetch(`https://${shop}/admin/api/2023-10/orders/${args.order_id}.json`, {
+            headers: {
+                'X-Shopify-Access-Token': accessToken
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Shopify API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return { ok: true, order: data.order };
+
+    } catch (error) {
+        console.error("Shopify lookup error", error);
+        return { ok: false, error: "Failed to fetch order from Shopify" };
+    }
 }
 
 async function createLead(bot: any, args: { name: string; email?: string; phone?: string; source?: string }) {
