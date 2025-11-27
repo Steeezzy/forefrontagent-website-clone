@@ -84,3 +84,51 @@ export async function geminiFileSearch(params: {
         cost: 0, // Calculate based on tokens if needed
     };
 }
+
+/**
+ * fileSearchQuery
+ * Wrapper for file search using the existing geminiFileSearch implementation
+ */
+export async function fileSearchQuery(fileIds: string[], query: string) {
+    const res = await geminiFileSearch({
+        model: "gemini-1.5-flash", // Default model
+        fileIds,
+        query
+    });
+    return { text: res.text, usage: { tokens: res.tokens } };
+}
+
+/**
+ * embedText
+ * Wrapper for embedding using the existing geminiEmbed implementation
+ */
+export async function embedText(text: string): Promise<number[]> {
+    return await geminiEmbed(text);
+}
+
+/**
+ * chatWithContext
+ * Wrapper for chat using the existing geminiChat implementation
+ */
+export async function chatWithContext(opts: {
+    model?: string;
+    prompt: string | Array<{ role: string; content: string }>;
+    functions?: any[];
+}) {
+    const messages = typeof opts.prompt === "string"
+        ? [{ role: "user", content: opts.prompt }]
+        : opts.prompt;
+
+    const res = await geminiChat({
+        model: opts.model || "gemini-1.5-flash",
+        messages: messages as { role: string; content: string }[],
+        tools: opts.functions
+    });
+
+    return {
+        text: res.text,
+        function_call: undefined, // geminiChat needs update to return function calls if needed
+        usage: { tokens: res.tokens }
+    };
+}
+

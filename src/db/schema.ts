@@ -31,8 +31,9 @@ export const embeddings = sqliteTable('embeddings', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   botId: integer('bot_id').notNull().references(() => bots.id),
   chunkId: text('chunk_id'),
-  vector: text('vector'),
+  vector: text('vector', { mode: 'json' }),
   sourceRef: text('source_ref'),
+
   textExcerpt: text('text_excerpt'),
   createdAt: text('created_at').notNull(),
 });
@@ -89,6 +90,27 @@ export const billing = sqliteTable('billing', {
   seats: integer('seats').default(1),
   createdAt: text('created_at').notNull(),
 });
+
+export const appointments = sqliteTable('appointments', {
+  id: text('id').primaryKey(),
+  botId: integer('bot_id').notNull().references(() => bots.id),
+  conversationId: integer('conversation_id').notNull().references(() => conversations.id),
+  service: text('service').notNull(),
+  date: text('date').notNull(),
+  time: text('time'),
+  createdAt: text('created_at').notNull(),
+});
+
+export const leads = sqliteTable('leads', {
+  id: text('id').primaryKey(),
+  botId: integer('bot_id').notNull().references(() => bots.id),
+  name: text('name').notNull(),
+  email: text('email'),
+  phone: text('phone'),
+  source: text('source').default('bot'),
+  createdAt: text('created_at').notNull(),
+});
+
 
 
 // Auth tables for better-auth
