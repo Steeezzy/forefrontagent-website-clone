@@ -24,15 +24,17 @@ let textClient: any = null;
 let embedClient: any = null;
 
 // Lazy init (try to load SDK if available)
+// Note: In Next.js/Webpack, require might fail if module is missing at build time.
+// We'll use a try-catch block with a conditional check.
 try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const genai = require("@google/generative-ai");
+    // @ts-ignore
+    const genai = await import("@google/generative-ai");
     // Adjust client instantiation per SDK docs:
-    textClient = new genai.TextServiceClient?.({ apiKey: API_KEY }) ?? genai;
-    embedClient = new genai.EmbeddingsServiceClient?.({ apiKey: API_KEY }) ?? genai;
+    textClient = new genai.GoogleGenerativeAI(API_KEY).getGenerativeModel({ model: DEFAULT_MODEL });
+    embedClient = new genai.GoogleGenerativeAI(API_KEY).getGenerativeModel({ model: EMBEDDING_MODEL });
 } catch (e) {
     // SDK not available — functions will throw if used.
-    // Antigravity might leave as-is; run `npm i @google/generative-ai` or adapt to fetch.
+    console.warn("Google GenAI SDK not found. Install @google/generative-ai to use Gemini features.");
 }
 
 /**

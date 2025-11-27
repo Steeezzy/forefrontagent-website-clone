@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
         const conv = await saveConversationIfNew({ id: body.conversationId, botId: body.botId, userId: body.userId });
 
         await saveMessage({
-            conversationId: conv.id,
-            botId: bot.id,
+            conversationId: String(conv.id), // Convert back to string if needed by helper, or helper should accept number
+            botId: String(bot.id),
             role: "user",
             text: body.message,
             metadata: body.metadata ?? {}
@@ -57,17 +57,17 @@ export async function POST(req: NextRequest) {
         // If bot has file_ids, use File Search (fast onboarding)
         if (bot.file_ids && Array.isArray(bot.file_ids) && bot.file_ids.length > 0) {
             const fileResp = await fileSearchQuery(bot.file_ids, body.message);
-            await saveMessage({ conversationId: conv.id, botId: bot.id, role: "assistant", text: fileResp.text, metadata: { source: "file_search" } });
-            if (fileResp.usage?.tokens) await recordUsage({ botId: bot.id, tokens: fileResp.usage.tokens });
+            await saveMessage({ conversationId: String(conv.id), botId: String(bot.id), role: "assistant", text: fileResp.text, metadata: { source: "file_search" } });
+            if (fileResp.usage?.tokens) await recordUsage({ botId: String(bot.id), tokens: fileResp.usage.tokens });
             return NextResponse.json({ ok: true, text: fileResp.text, source: "file_search" });
         }
 
         // Classic RAG: embed query, vector search
         const qEmbedding = await embedText(body.message);
-        const hits = await vectorSearch(bot.id, qEmbedding, 5);
+        const hits = await vectorSearch(String(bot.id), qEmbedding, 5);
         const contextPieces = hits.map((h) => `Source: ${h.source_ref}\n${h.text_excerpt}`).join("\n\n");
 
-        const history = await getConversationById(conv.id, { limit: 6 });
+        const history = await getConversationById(String(conv.id), { limit: 6 });
         const convoText = history.map((m) => `${m.role === "assistant" ? "Assistant" : "User"}: ${m.text}`).join("\n");
 
         const systemPrompt = `You are ForefrontAgent for ${bot.name}. Use only the provided knowledge. Be concise. If unsure, say "I don't know" and suggest contacting support.`;
@@ -101,8 +101,8 @@ export async function POST(req: NextRequest) {
             try {
                 const fc = geminiResp.function_call;
                 const execResult = await executeFunctionCall(bot, conv, fc.name, fc.arguments);
-                await saveMessage({ conversationId: conv.id, botId: bot.id, role: "assistant", text: `Performed action: ${fc.name}`, metadata: { function: fc.name, result: execResult } });
-                if (geminiResp.usage?.tokens) await recordUsage({ botId: bot.id, tokens: geminiResp.usage.tokens });
+                await saveMessage({ conversationId: String(conv.id), botId: String(bot.id), role: "assistant", text: `Performed action: ${fc.name}`, metadata: { function: fc.name, result: execResult } });
+                if (geminiResp.usage?.tokens) await recordUsage({ botId: String(bot.id), tokens: geminiResp.usage.tokens });
                 return NextResponse.json({ ok: true, action: true, function: fc.name, result: execResult });
             } catch (err) {
                 console.error("function exec error", err);
@@ -110,8 +110,8 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        await saveMessage({ conversationId: conv.id, botId: bot.id, role: "assistant", text: geminiResp.text, metadata: { source: "rag", retrieved_ids: hits.map((h) => h.id) } });
-        if (geminiResp.usage?.tokens) await recordUsage({ botId: bot.id, tokens: geminiResp.usage.tokens });
+        await saveMessage({ conversationId: String(conv.id), botId: String(bot.id), role: "assistant", text: geminiResp.text, metadata: { source: "rag", retrieved_ids: hits.map((h) => h.id) } });
+        if (geminiResp.usage?.tokens) await recordUsage({ botId: String(bot.id), tokens: geminiResp.usage.tokens });
 
         return NextResponse.json({ ok: true, text: geminiResp.text, source: "rag" });
     } catch (err: any) {

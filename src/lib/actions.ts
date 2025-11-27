@@ -5,6 +5,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { db } from "@/db/index"; // adjust to your drizzle db export
+import { appointments, leads } from "@/db/schema";
 
 export async function executeFunctionCall(bot: any, conv: any, name: string, args: any) {
     switch (name) {
@@ -25,14 +26,14 @@ async function bookAppointment(bot: any, conv: any, args: { service: string; dat
 
     // Example: insert into an 'appointments' table (create migration if needed)
     try {
-        await db.insert("appointments").values({
+        await db.insert(appointments).values({
             id,
-            bot_id: bot.id,
-            conversation_id: conv.id,
+            botId: parseInt(bot.id),
+            conversationId: parseInt(conv.id),
             service: args.service,
             date: args.date,
             time: args.time ?? null,
-            created_at: new Date().toISOString()
+            createdAt: new Date().toISOString()
         });
     } catch (err) {
         console.error("bookAppointment DB error", err);
@@ -55,14 +56,14 @@ async function lookupOrder(bot: any, args: { order_id: string }) {
 
 async function createLead(bot: any, args: { name: string; email?: string; phone?: string; source?: string }) {
     const id = uuidv4();
-    await db.insert("leads").values({
+    await db.insert(leads).values({
         id,
-        bot_id: bot.id,
+        botId: parseInt(bot.id),
         name: args.name,
         email: args.email ?? null,
         phone: args.phone ?? null,
         source: args.source ?? "bot",
-        created_at: new Date().toISOString()
+        createdAt: new Date().toISOString()
     });
     return { ok: true, lead_id: id };
 }
