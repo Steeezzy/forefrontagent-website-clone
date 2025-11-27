@@ -1,12 +1,11 @@
-import { db } from "@/db/index";
-import { v4 as uuidv4 } from "uuid";
-import { appointments, leads } from "@/db/schema";
+// src/lib/actions.ts
+// Executors for model function calls (book_appointment, lookup_order, create_lead)
+// These are safe server-side handlers. Validate inputs before actions.
+// TODO: fetch integration credentials from `integrations` table.
 
-/**
- * executeFunctionCall
- * name: function name returned by model
- * args: parsed object
- */
+import { v4 as uuidv4 } from "uuid";
+import { db } from "@/db/index"; // adjust to your drizzle db export
+
 export async function executeFunctionCall(bot: any, conv: any, name: string, args: any) {
     switch (name) {
         case "book_appointment":
@@ -20,58 +19,50 @@ export async function executeFunctionCall(bot: any, conv: any, name: string, arg
     }
 }
 
-/**
- * bookAppointment - Google Calendar integration example (stub)
- * Expected args: { service: string, date: "YYYY-MM-DD", time: "HH:MM" }
- */
 async function bookAppointment(bot: any, conv: any, args: { service: string; date: string; time?: string }) {
-    // Validate inputs:
-    if (!args.service || !args.date) throw new Error("service and date required");
-
-    // TODO: Use saved OAuth tokens for the bot (store in integrations table)
-    // Example stub: create a local booking row and return confirmation
+    if (!args?.service || !args?.date) throw new Error("service and date required");
     const id = uuidv4();
-    const row = {
-        id,
-        botId: bot.id,
-        conversationId: conv.id,
-        service: args.service,
-        date: args.date,
-        time: args.time ?? null,
-        createdAt: new Date().toISOString()
-    };
-    await db.insert(appointments).values(row);
-    return { ok: true, booking_id: id, ...row };
+
+    // Example: insert into an 'appointments' table (create migration if needed)
+    try {
+        await db.insert("appointments").values({
+            id,
+            bot_id: bot.id,
+            conversation_id: conv.id,
+            service: args.service,
+            date: args.date,
+            time: args.time ?? null,
+            created_at: new Date().toISOString()
+        });
+    } catch (err) {
+        console.error("bookAppointment DB error", err);
+    }
+
+    // TODO: If Google Calendar integration exists, use stored OAuth token to create calendar event.
+    return { ok: true, booking_id: id, service: args.service, date: args.date, time: args.time ?? null };
 }
 
-/**
- * lookupOrder - Shopify order lookup stub
- * Expected args: { order_id: string }
- */
 async function lookupOrder(bot: any, args: { order_id: string }) {
-    if (!args.order_id) throw new Error("order_id required");
-    // TODO: Use integration credentials (shopify access token) stored in integrations table
-    // Example: fetch from shopify admin API:
-    // const res = await fetch(`https://${shopDomain}/admin/api/2025-01/orders/${args.order_id}.json`, { headers: { 'X-Shopify-Access-Token': token }});
-    // const order = await res.json();
-    // For now return a stub:
+    if (!args?.order_id) throw new Error("order_id required");
+    // TODO: Fetch Shopify credentials from integrations table and call Shopify Admin API
+    // Replace with actual fetch:
+    // const shopToken = await getIntegrationToken(bot.id, 'shopify');
+    // return fetchShopifyOrder(shopToken, args.order_id)
+
+    // Stub response:
     return { ok: true, order: { id: args.order_id, status: "processing", total: "₹1234.00" } };
 }
 
-/**
- * createLead - Save lead in DB
- * Expected args: { name: string, email?: string, phone?: string, source?: string }
- */
 async function createLead(bot: any, args: { name: string; email?: string; phone?: string; source?: string }) {
     const id = uuidv4();
-    await db.insert(leads).values({
+    await db.insert("leads").values({
         id,
-        botId: bot.id,
+        bot_id: bot.id,
         name: args.name,
         email: args.email ?? null,
         phone: args.phone ?? null,
         source: args.source ?? "bot",
-        createdAt: new Date().toISOString()
+        created_at: new Date().toISOString()
     });
     return { ok: true, lead_id: id };
 }

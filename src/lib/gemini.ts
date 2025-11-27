@@ -1,134 +1,117 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GoogleAIFileManager } from "@google/generative-ai/server";
+// src/lib/gemini.ts
+// Gemini (Vertex AI / Google GenAI) wrapper utilities.
+// NOTE: adjust SDK imports to the SDK you have installed. This file uses
+// example shapes and includes comments where to adapt to your environment.
 
-const apiKey = process.env.GENAI_API_KEY;
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-const fileManager = apiKey ? new GoogleAIFileManager(apiKey) : null;
+import type { GenerateResponse } from "@google/generative-ai"; // adjust if needed
+// If SDK not available, you can use REST fetch with ADC (Application Default Credentials).
 
-export async function geminiChat(params: {
-    model: string;
-    systemPrompt?: string;
-    messages: { role: string; content: string }[];
-    tools?: any[];
-}) {
-    if (!genAI) throw new Error("GENAI_API_KEY is not set");
+const API_KEY = process.env.GENAI_API_KEY || "";
+const DEFAULT_MODEL = process.env.GENAI_MODEL || "gemini-2.5-flash";
+const EMBEDDING_MODEL = process.env.GENAI_EMBEDDING_MODEL || "gemini-embedding-001";
 
-    const model = genAI.getGenerativeModel({ model: params.model });
+/**
+ * IMPORTANT:
+ * Replace the clients below with the actual SDK classes you install.
+ * Example packages: @google/generative-ai, google-genai, @google-cloud/aiplatform
+ *
+ * If you don't install any SDK yet, keep these functions but implement
+ * a fetch-based fallback (commented examples included).
+ */
 
-    const chat = model.startChat({
-        history: params.messages.map((m) => ({
-            role: m.role === "user" ? "user" : "model",
-            parts: [{ text: m.content }],
-        })),
-        systemInstruction: params.systemPrompt,
-    });
+// Placeholder client objects — replace with actual SDK clients.
+let textClient: any = null;
+let embedClient: any = null;
 
-    const result = await chat.sendMessage("");
-    const response = await result.response;
-    const text = response.text();
-
-    return {
-        text,
-        tokens: response.usageMetadata?.totalTokenCount || 0,
-    };
-}
-
-export async function geminiEmbed(text: string) {
-    if (!genAI) throw new Error("GENAI_API_KEY is not set");
-
-    const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
-    const result = await model.embedContent(text);
-    return result.embedding.values;
-}
-
-export async function uploadFileToGemini(path: string, mimeType: string) {
-    if (!fileManager) throw new Error("GENAI_API_KEY is not set");
-
-    const uploadResponse = await fileManager.uploadFile(path, {
-        mimeType,
-        displayName: path.split('/').pop(),
-    });
-
-    return uploadResponse.file;
-}
-
-export async function geminiFileSearch(params: {
-    model: string;
-    fileIds: string[];
-    query: string;
-}) {
-    if (!genAI) throw new Error("GENAI_API_KEY is not set");
-
-    const model = genAI.getGenerativeModel({ model: params.model });
-
-    // Construct a prompt that includes the file context
-    // Note: In a real production scenario with Gemini 1.5 Pro, you can pass fileData parts directly.
-    // For this implementation, we assume fileIds are valid Gemini File API URIs or names.
-
-    const result = await model.generateContent([
-        { text: params.query },
-        ...params.fileIds.map(uri => ({
-            fileData: {
-                mimeType: "application/pdf", // Simplified: assuming PDF for now, should be dynamic
-                fileUri: uri
-            }
-        }))
-    ]);
-
-    const response = await result.response;
-    const text = response.text();
-
-    return {
-        text,
-        tokens: response.usageMetadata?.totalTokenCount || 0,
-        cost: 0, // Calculate based on tokens if needed
-    };
+// Lazy init (try to load SDK if available)
+try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const genai = require("@google/generative-ai");
+    // Adjust client instantiation per SDK docs:
+    textClient = new genai.TextServiceClient?.({ apiKey: API_KEY }) ?? genai;
+    embedClient = new genai.EmbeddingsServiceClient?.({ apiKey: API_KEY }) ?? genai;
+} catch (e) {
+    // SDK not available — functions will throw if used.
+    // Antigravity might leave as-is; run `npm i @google/generative-ai` or adapt to fetch.
 }
 
 /**
- * fileSearchQuery
- * Wrapper for file search using the existing geminiFileSearch implementation
+ * fileSearchQuery(fileIds, query)
+ * Call Gemini file search (if using Gemini File Search).
+ * Returns: { text: string, usage?: { tokens?: number } }
  */
 export async function fileSearchQuery(fileIds: string[], query: string) {
-    const res = await geminiFileSearch({
-        model: "gemini-1.5-flash", // Default model
-        fileIds,
-        query
-    });
-    return { text: res.text, usage: { tokens: res.tokens } };
+    if (!textClient) {
+        throw new Error("GenAI SDK not initialized. Install @google/generative-ai or implement REST fallback.");
+    }
+
+    try {
+        // SDK-specific call (pseudo-code). Adapt per your SDK docs.
+        const req: any = {
+            model: DEFAULT_MODEL,
+            messages: [{ role: "user", content: query }],
+            // Many SDKs support a `fileIds` or `contextFiles` parameter — add accordingly.
+            // fileIds
+        };
+
+        const res: any = await textClient.generate(req);
+        const candidate = res?.candidates?.[0] || res?.output?.[0] || {};
+        const text = candidate?.content?.map?.((c: any) => c?.text ?? c).join("") ?? String(candidate);
+        const tokens = res?.usage?.total_tokens ?? undefined;
+        return { text: String(text).trim(), usage: { tokens } };
+    } catch (err) {
+        console.error("fileSearchQuery error:", err);
+        throw err;
+    }
 }
 
 /**
- * embedText
- * Wrapper for embedding using the existing geminiEmbed implementation
+ * embedText(text) -> Promise<number[]>
  */
 export async function embedText(text: string): Promise<number[]> {
-    return await geminiEmbed(text);
+    if (!embedClient) {
+        throw new Error("GenAI Embedding client not initialized. Install @google/generative-ai or implement REST fallback.");
+    }
+    try {
+        const resp: any = await embedClient.embed?.({ model: EMBEDDING_MODEL, input: [text] }) || await embedClient.embedContent?.({ model: EMBEDDING_MODEL, input: [text] });
+        // Parse embedding
+        const vector = resp?.data?.[0]?.embedding || resp?.embeddings?.[0]?.embedding;
+        if (!vector) throw new Error("No embedding returned");
+        return vector as number[];
+    } catch (err) {
+        console.error("embedText error:", err);
+        throw err;
+    }
 }
 
 /**
- * chatWithContext
- * Wrapper for chat using the existing geminiChat implementation
+ * chatWithContext({ model, prompt, functions })
+ * prompt may be string or messages array
+ * returns { text, function_call?, usage? }
  */
 export async function chatWithContext(opts: {
     model?: string;
     prompt: string | Array<{ role: string; content: string }>;
     functions?: any[];
 }) {
-    const messages = typeof opts.prompt === "string"
-        ? [{ role: "user", content: opts.prompt }]
-        : opts.prompt;
+    if (!textClient) {
+        throw new Error("GenAI chat client not initialized.");
+    }
 
-    const res = await geminiChat({
-        model: opts.model || "gemini-1.5-flash",
-        messages: messages as { role: string; content: string }[],
-        tools: opts.functions
-    });
+    try {
+        const model = opts.model ?? DEFAULT_MODEL;
+        const messages = typeof opts.prompt === "string" ? [{ role: "user", content: opts.prompt }] : opts.prompt;
+        const req: any = { model, messages, temperature: 0.0, maxOutputTokens: 800 };
+        if (opts.functions) req.functions = opts.functions;
 
-    return {
-        text: res.text,
-        function_call: undefined, // geminiChat needs update to return function calls if needed
-        usage: { tokens: res.tokens }
-    };
+        const res: any = await textClient.generate(req);
+        const candidate = res?.candidates?.[0] || res?.output?.[0] || {};
+        const text = candidate?.content?.map?.((c: any) => (c?.text ?? c))?.join("") ?? candidate?.content ?? "";
+        const function_call = candidate?.metadata?.function_call ?? candidate?.function_call ?? undefined;
+        const tokens = res?.usage?.total_tokens ?? undefined;
+        return { text: String(text).trim(), function_call, usage: { tokens } };
+    } catch (err) {
+        console.error("chatWithContext error:", err);
+        throw err;
+    }
 }
-

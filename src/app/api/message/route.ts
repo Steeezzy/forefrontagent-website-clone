@@ -1,75 +1,121 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { bots, messages, usage } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { geminiChat, geminiEmbed, geminiFileSearch } from '@/lib/gemini';
-import { redis } from '@/lib/redis';
+// src/app/api/message/route.ts
+// Next.js App Router route handler for chat messages.
 
+import { NextRequest, NextResponse } from "next/server";
+import { fileSearchQuery, embedText, chatWithContext } from "@/lib/gemini";
+import { getBotById, saveConversationIfNew, saveMessage, vectorSearch, recordUsage, getConversationById } from "@/lib/db";
+// import { shouldRunFlow, runFlow } from "@/lib/flows"; // optional - keep if you have flows
+import { executeFunctionCall } from "@/lib/actions";
 
+type Incoming = {
+    botId: string;
+    conversationId?: string;
+    userId?: string;
+    message: string;
+    metadata?: Record<string, any>;
+};
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
-        const { botId, message, userId } = body;
-
-        if (!botId || !message) {
-            return NextResponse.json({ error: 'Missing botId or message' }, { status: 400 });
+        const body: Incoming = await req.json();
+        if (!body?.botId || !body?.message) {
+            return NextResponse.json({ error: "botId and message required" }, { status: 400 });
         }
 
-        const bot = await db.query.bots.findFirst({
-            where: eq(bots.id, botId),
+        const bot = await getBotById(body.botId);
+        if (!bot) return NextResponse.json({ error: "bot not found" }, { status: 404 });
+
+        const conv = await saveConversationIfNew({ id: body.conversationId, botId: body.botId, userId: body.userId });
+
+        await saveMessage({
+            conversationId: conv.id,
+            botId: bot.id,
+            role: "user",
+            text: body.message,
+            metadata: body.metadata ?? {}
         });
 
-        if (!bot) {
-            return NextResponse.json({ error: 'Bot not found' }, { status: 404 });
+        // Flow check (if you implemented flows)
+        try {
+            // const wantsFlow = typeof shouldRunFlow === "function" ? await shouldRunFlow(bot, body.message) : false;
+            const wantsFlow = false; // Placeholder until flows are implemented
+            if (wantsFlow) {
+                // const flowResult = await runFlow({ bot, conversation: conv, message: body.message });
+                // // Save flow messages if any
+                // if (flowResult?.messages) {
+                //   for (const m of flowResult.messages) {
+                //     await saveMessage({ conversationId: conv.id, botId: bot.id, role: m.role, text: m.text, metadata: m.metadata ?? {} });
+                //   }
+                // }
+                // return NextResponse.json({ ok: true, flow: true, result: flowResult });
+            }
+        } catch (e) {
+            // fallback to RAG if flow runner fails
+            console.warn("flow runner error", e);
         }
 
-        // TODO: Flow check logic here
-
-        // RAG Logic
-        let responseText = "";
-        let totalTokens = 0;
-
-        // Check if bot has file search enabled (assuming settings structure)
-        const settings = JSON.parse(bot.settings as string);
-
-        if (settings.useFileSearch && settings.fileIds && settings.fileIds.length > 0) {
-            // File Search Mode
-            const aiResp = await geminiFileSearch({ model: 'gemini-1.5-flash', fileIds: settings.fileIds, query: message });
-            responseText = aiResp.text;
-            totalTokens = aiResp.tokens;
-        } else {
-            // Vector Search Mode (Simplified)
-            // 1. Embed query
-            // const qEmb = await geminiEmbed(message);
-            // 2. Search embeddings (Need vector search capability in DB or external vector DB)
-            // For now, just direct chat
-            const aiResp = await geminiChat({
-                model: 'gemini-1.5-flash',
-                messages: [{ role: 'user', content: message }],
-                systemPrompt: `You are a helpful assistant for ${bot.name}.`
-            });
-            responseText = aiResp.text;
-            totalTokens = aiResp.tokens;
+        // If bot has file_ids, use File Search (fast onboarding)
+        if (bot.file_ids && Array.isArray(bot.file_ids) && bot.file_ids.length > 0) {
+            const fileResp = await fileSearchQuery(bot.file_ids, body.message);
+            await saveMessage({ conversationId: conv.id, botId: bot.id, role: "assistant", text: fileResp.text, metadata: { source: "file_search" } });
+            if (fileResp.usage?.tokens) await recordUsage({ botId: bot.id, tokens: fileResp.usage.tokens });
+            return NextResponse.json({ ok: true, text: fileResp.text, source: "file_search" });
         }
 
-        // Save messages
-        // Note: conversationId handling needs to be robust (create if not exists)
-        // For this snippet, assuming we have a conversationId or create one.
-        // tailored for simplicity in this step.
+        // Classic RAG: embed query, vector search
+        const qEmbedding = await embedText(body.message);
+        const hits = await vectorSearch(bot.id, qEmbedding, 5);
+        const contextPieces = hits.map((h) => `Source: ${h.source_ref}\n${h.text_excerpt}`).join("\n\n");
 
-        // Record usage
-        await db.insert(usage).values({
-            botId,
-            tokens: totalTokens,
-            date: new Date().toISOString().split('T')[0],
-            createdAt: new Date().toISOString(),
-        });
+        const history = await getConversationById(conv.id, { limit: 6 });
+        const convoText = history.map((m) => `${m.role === "assistant" ? "Assistant" : "User"}: ${m.text}`).join("\n");
 
-        return NextResponse.json({ text: responseText });
+        const systemPrompt = `You are ForefrontAgent for ${bot.name}. Use only the provided knowledge. Be concise. If unsure, say "I don't know" and suggest contacting support.`;
 
-    } catch (error) {
-        console.error("Error in chat endpoint:", error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        const prompt = [
+            systemPrompt,
+            "\n-- Retrieved Knowledge --\n",
+            contextPieces,
+            "\n-- Conversation --\n",
+            convoText,
+            `\nUser: ${body.message}\nAssistant:`
+        ].join("\n");
+
+        const functions = [
+            {
+                name: "book_appointment",
+                description: "Book an appointment",
+                parameters: { type: "object", properties: { service: { type: "string" }, date: { type: "string" }, time: { type: "string" } }, required: ["service", "date"] }
+            },
+            {
+                name: "lookup_order",
+                description: "Lookup an order by id",
+                parameters: { type: "object", properties: { order_id: { type: "string" } }, required: ["order_id"] }
+            },
+            { name: "create_lead", description: "Create a lead", parameters: { type: "object", properties: { name: { type: "string" }, email: { type: "string" } }, required: ["name"] } }
+        ];
+
+        const geminiResp = await chatWithContext({ model: bot.chat_model || undefined, prompt, functions });
+
+        if (geminiResp.function_call) {
+            try {
+                const fc = geminiResp.function_call;
+                const execResult = await executeFunctionCall(bot, conv, fc.name, fc.arguments);
+                await saveMessage({ conversationId: conv.id, botId: bot.id, role: "assistant", text: `Performed action: ${fc.name}`, metadata: { function: fc.name, result: execResult } });
+                if (geminiResp.usage?.tokens) await recordUsage({ botId: bot.id, tokens: geminiResp.usage.tokens });
+                return NextResponse.json({ ok: true, action: true, function: fc.name, result: execResult });
+            } catch (err) {
+                console.error("function exec error", err);
+                return NextResponse.json({ ok: false, error: "function execution failed" }, { status: 500 });
+            }
+        }
+
+        await saveMessage({ conversationId: conv.id, botId: bot.id, role: "assistant", text: geminiResp.text, metadata: { source: "rag", retrieved_ids: hits.map((h) => h.id) } });
+        if (geminiResp.usage?.tokens) await recordUsage({ botId: bot.id, tokens: geminiResp.usage.tokens });
+
+        return NextResponse.json({ ok: true, text: geminiResp.text, source: "rag" });
+    } catch (err: any) {
+        console.error("message route error", err);
+        return NextResponse.json({ error: err?.message ?? "internal error" }, { status: 500 });
     }
 }
