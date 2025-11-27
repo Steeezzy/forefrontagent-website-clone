@@ -5,19 +5,20 @@ import { eq, and, desc } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const { botId } = params;
+    const { botId } = await params;
     const { searchParams } = new URL(request.url);
 
     // Validate botId
     const parsedBotId = parseInt(botId);
+
     if (!botId || isNaN(parsedBotId)) {
       return NextResponse.json(
-        { 
+        {
           error: 'Valid bot ID is required',
-          code: 'INVALID_BOT_ID' 
+          code: 'INVALID_BOT_ID'
         },
         { status: 400 }
       );
@@ -65,18 +66,19 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const { botId } = params;
+    const { botId } = await params;
+
 
     // Validate botId
     const parsedBotId = parseInt(botId);
     if (!botId || isNaN(parsedBotId)) {
       return NextResponse.json(
-        { 
+        {
           error: 'Valid bot ID is required',
-          code: 'INVALID_BOT_ID' 
+          code: 'INVALID_BOT_ID'
         },
         { status: 400 }
       );
@@ -94,9 +96,9 @@ export async function POST(
       const parsedUserId = parseInt(userId);
       if (isNaN(parsedUserId)) {
         return NextResponse.json(
-          { 
+          {
             error: 'User ID must be a valid integer',
-            code: 'INVALID_USER_ID' 
+            code: 'INVALID_USER_ID'
           },
           { status: 400 }
         );
@@ -109,9 +111,9 @@ export async function POST(
     if (metadata !== undefined && metadata !== null) {
       if (typeof metadata !== 'object' || Array.isArray(metadata)) {
         return NextResponse.json(
-          { 
+          {
             error: 'Metadata must be a valid object',
-            code: 'INVALID_METADATA' 
+            code: 'INVALID_METADATA'
           },
           { status: 400 }
         );

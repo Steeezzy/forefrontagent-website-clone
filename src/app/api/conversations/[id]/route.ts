@@ -5,18 +5,19 @@ import { eq, asc } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
+
 
     // Validate ID is valid integer
     if (!id || isNaN(parseInt(id))) {
       return NextResponse.json(
-        { 
+        {
           error: "Valid ID is required",
-          code: "INVALID_ID" 
-        }, 
+          code: "INVALID_ID"
+        },
         { status: 400 }
       );
     }
@@ -31,10 +32,10 @@ export async function GET(
 
     if (conversation.length === 0) {
       return NextResponse.json(
-        { 
+        {
           error: 'Conversation not found',
           code: 'CONVERSATION_NOT_FOUND'
-        }, 
+        },
         { status: 404 }
       );
     }
@@ -56,9 +57,9 @@ export async function GET(
   } catch (error) {
     console.error('GET error:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
-      }, 
+      },
       { status: 500 }
     );
   }

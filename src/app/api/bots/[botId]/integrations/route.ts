@@ -5,11 +5,12 @@ import { eq, and, desc } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const botId = params.botId;
-    
+    const { botId } = await params;
+
+
     // Validate botId
     if (!botId || isNaN(parseInt(botId))) {
       return NextResponse.json(
@@ -20,11 +21,11 @@ export async function GET(
 
     const parsedBotId = parseInt(botId);
     const { searchParams } = new URL(request.url);
-    
+
     // Pagination parameters
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
     const offset = parseInt(searchParams.get('offset') ?? '0');
-    
+
     // Filter parameters
     const type = searchParams.get('type');
 
@@ -67,11 +68,12 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const botId = params.botId;
-    
+    const { botId } = await params;
+
+
     // Validate botId
     if (!botId || isNaN(parseInt(botId))) {
       return NextResponse.json(
@@ -96,7 +98,7 @@ export async function POST(
 
     // Sanitize inputs
     const sanitizedType = type.trim();
-    const sanitizedCredentials = credentialsEncrypted 
+    const sanitizedCredentials = credentialsEncrypted
       ? typeof credentialsEncrypted === 'string' ? credentialsEncrypted.trim() : credentialsEncrypted
       : null;
 
@@ -133,11 +135,12 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const botId = params.botId;
-    
+    const { botId } = await params;
+
+
     // Validate botId
     if (!botId || isNaN(parseInt(botId))) {
       return NextResponse.json(

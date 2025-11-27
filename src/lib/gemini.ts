@@ -3,7 +3,6 @@
 // NOTE: adjust SDK imports to the SDK you have installed. This file uses
 // example shapes and includes comments where to adapt to your environment.
 
-import type { GenerateResponse } from "@google/generative-ai"; // adjust if needed
 // If SDK not available, you can use REST fetch with ADC (Application Default Credentials).
 
 const API_KEY = process.env.GENAI_API_KEY || "";
@@ -22,6 +21,7 @@ const EMBEDDING_MODEL = process.env.GENAI_EMBEDDING_MODEL || "gemini-embedding-0
 // Placeholder client objects — replace with actual SDK clients.
 let textClient: any = null;
 let embedClient: any = null;
+let fileManager: any = null;
 
 // Lazy init (try to load SDK if available)
 // Note: In Next.js/Webpack, require might fail if module is missing at build time.
@@ -29,13 +29,29 @@ let embedClient: any = null;
 try {
     // @ts-ignore
     const genai = await import("@google/generative-ai");
+    // @ts-ignore
+    const genaiServer = await import("@google/generative-ai/server");
+
     // Adjust client instantiation per SDK docs:
     textClient = new genai.GoogleGenerativeAI(API_KEY).getGenerativeModel({ model: DEFAULT_MODEL });
     embedClient = new genai.GoogleGenerativeAI(API_KEY).getGenerativeModel({ model: EMBEDDING_MODEL });
+    fileManager = new genaiServer.GoogleAIFileManager(API_KEY);
 } catch (e) {
     // SDK not available — functions will throw if used.
     console.warn("Google GenAI SDK not found. Install @google/generative-ai to use Gemini features.");
 }
+
+export async function uploadFileToGemini(path: string, mimeType: string) {
+    if (!fileManager) throw new Error("GenAI FileManager not initialized.");
+
+    const uploadResponse = await fileManager.uploadFile(path, {
+        mimeType,
+        displayName: path.split('/').pop(),
+    });
+
+    return uploadResponse.file;
+}
+
 
 /**
  * fileSearchQuery(fileIds, query)

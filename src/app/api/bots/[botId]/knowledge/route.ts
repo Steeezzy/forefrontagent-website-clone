@@ -5,10 +5,11 @@ import { eq, and } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const { botId } = params;
+    const { botId } = await params;
+
     const { searchParams } = new URL(request.url);
 
     // Validate botId
@@ -58,10 +59,11 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const { botId } = params;
+    const { botId } = await params;
+
 
     // Validate botId
     const parsedBotId = parseInt(botId);
@@ -108,10 +110,11 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const { botId } = params;
+    const { botId } = await params;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 

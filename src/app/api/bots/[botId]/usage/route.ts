@@ -5,11 +5,12 @@ import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const { botId } = params;
-    
+    const { botId } = await params;
+
+
     // Validate botId
     if (!botId || isNaN(parseInt(botId))) {
       return NextResponse.json(
@@ -20,28 +21,28 @@ export async function GET(
 
     const botIdInt = parseInt(botId);
     const { searchParams } = new URL(request.url);
-    
+
     // Pagination
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '30'), 100);
     const offset = parseInt(searchParams.get('offset') ?? '0');
-    
+
     // Date range filters
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
     // Build where conditions
     const conditions = [eq(usage.botId, botIdInt)];
-    
+
     if (startDate) {
       conditions.push(gte(usage.date, startDate));
     }
-    
+
     if (endDate) {
       conditions.push(lte(usage.date, endDate));
     }
 
-    const whereCondition = conditions.length > 1 
-      ? and(...conditions) 
+    const whereCondition = conditions.length > 1
+      ? and(...conditions)
       : conditions[0];
 
     // Fetch records
@@ -83,11 +84,12 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: Promise<{ botId: string }> }
 ) {
   try {
-    const { botId } = params;
-    
+    const { botId } = await params;
+
+
     // Validate botId
     if (!botId || isNaN(parseInt(botId))) {
       return NextResponse.json(

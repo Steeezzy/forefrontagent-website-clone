@@ -5,17 +5,18 @@ import { eq, asc } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const conversationId = params.id;
+    const { id: conversationId } = await params;
 
     // Validate conversationId is a valid integer
+
     if (!conversationId || isNaN(parseInt(conversationId))) {
       return NextResponse.json(
-        { 
+        {
           error: 'Valid conversation ID is required',
-          code: 'INVALID_CONVERSATION_ID' 
+          code: 'INVALID_CONVERSATION_ID'
         },
         { status: 400 }
       );
@@ -45,17 +46,18 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const conversationId = params.id;
+    const { id: conversationId } = await params;
+
 
     // Validate conversationId is a valid integer
     if (!conversationId || isNaN(parseInt(conversationId))) {
       return NextResponse.json(
-        { 
+        {
           error: 'Valid conversation ID is required',
-          code: 'INVALID_CONVERSATION_ID' 
+          code: 'INVALID_CONVERSATION_ID'
         },
         { status: 400 }
       );
@@ -67,9 +69,9 @@ export async function POST(
     // Validate required fields
     if (!role || typeof role !== 'string' || role.trim() === '') {
       return NextResponse.json(
-        { 
+        {
           error: 'Role is required and must be a non-empty string',
-          code: 'MISSING_ROLE' 
+          code: 'MISSING_ROLE'
         },
         { status: 400 }
       );
@@ -77,9 +79,9 @@ export async function POST(
 
     if (!text || typeof text !== 'string' || text.trim() === '') {
       return NextResponse.json(
-        { 
+        {
           error: 'Text is required and must be a non-empty string',
-          code: 'MISSING_TEXT' 
+          code: 'MISSING_TEXT'
         },
         { status: 400 }
       );
@@ -88,12 +90,12 @@ export async function POST(
     // Validate role is one of allowed values
     const allowedRoles = ['user', 'assistant', 'system'];
     const sanitizedRole = role.trim();
-    
+
     if (!allowedRoles.includes(sanitizedRole)) {
       return NextResponse.json(
-        { 
+        {
           error: `Role must be one of: ${allowedRoles.join(', ')}`,
-          code: 'INVALID_ROLE' 
+          code: 'INVALID_ROLE'
         },
         { status: 400 }
       );
@@ -122,9 +124,9 @@ export async function POST(
         insertData.metadata = metadata;
       } else {
         return NextResponse.json(
-          { 
+          {
             error: 'Metadata must be a valid object',
-            code: 'INVALID_METADATA' 
+            code: 'INVALID_METADATA'
           },
           { status: 400 }
         );

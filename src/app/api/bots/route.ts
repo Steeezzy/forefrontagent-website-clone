@@ -38,8 +38,9 @@ export async function GET(request: NextRequest) {
     }
 
     // List bots with filters
-    let query = db.select().from(bots);
+    let query: any = db.select().from(bots);
     const conditions = [];
+
 
     // Filter by owner
     if (userId) {
@@ -165,9 +166,9 @@ export async function PUT(request: NextRequest) {
     // Prevent updating protected fields
     if ('id' in body || 'ownerId' in body || 'createdAt' in body) {
       return NextResponse.json(
-        { 
-          error: 'Cannot update id, ownerId, or createdAt fields', 
-          code: 'PROTECTED_FIELDS' 
+        {
+          error: 'Cannot update id, ownerId, or createdAt fields',
+          code: 'PROTECTED_FIELDS'
         },
         { status: 400 }
       );
