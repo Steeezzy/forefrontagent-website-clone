@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
             botId,
             type: 'shopify',
             credentialsEncrypted: encryptedToken,
-            config: { shop },
+            config: { shop: shop }, // Explicitly store shop
             createdAt: new Date().toISOString()
         });
 

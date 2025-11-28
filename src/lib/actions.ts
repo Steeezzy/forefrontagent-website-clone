@@ -60,11 +60,25 @@ async function lookupOrder(bot: any, args: { order_id: string }) {
     }
 
     // Decrypt token (simple base64 decode for MVP)
-    const accessToken = Buffer.from(integration.credentialsEncrypted, 'base64').toString('utf-8');
-    const shop = (integration.config as any)?.shop;
+    let accessToken = integration.credentialsEncrypted;
+
+    // Check if it's already a plain token (starts with shpat_ for offline tokens)
+    if (accessToken && !accessToken.startsWith('shpat_') && !accessToken.startsWith('shpca_')) {
+        try {
+            const decoded = Buffer.from(accessToken, 'base64').toString('utf-8');
+            // If decoding results in a valid-looking token, use it
+            if (decoded.startsWith('shpat_') || decoded.startsWith('shpca_')) {
+                accessToken = decoded;
+            }
+        } catch (e) {
+            // If decode fails, assume it's plain text
+        }
+    }
+    const config = integration.config as any;
+    const shop = config?.shop || config?.store;
 
     if (!shop) {
-        return { ok: false, error: "Shopify shop domain missing in config" };
+        return { ok: false, error: "Shopify shop domain missing in config (checked 'shop' and 'store')" };
     }
 
     try {
