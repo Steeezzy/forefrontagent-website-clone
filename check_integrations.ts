@@ -1,0 +1,1 @@
+import { db } from './src/db'; import { integrations } from './src/db/schema'; async function check() { const res = await db.select().from(integrations); console.log(JSON.stringify(res, null, 2)); process.exit(0); } check();

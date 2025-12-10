@@ -29,7 +29,7 @@ const sidebarItems = [
         icon: MessageSquare,
     },
     {
-        title: "Lyro AI",
+        title: "Tsukai AI",
         href: "/dashboard/ai-hub",
         icon: Bot,
     },

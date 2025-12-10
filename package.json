@@ -6,7 +6,8 @@
         "dev": "next dev --turbopack",
         "build": "next build",
         "start": "next start",
-        "lint": "next lint"
+        "lint": "next lint",
+        "n8n": "N8N_SECURE_COOKIE=false npx n8n start"
     },
     "dependencies": {
         "@babel/parser": "^7.28.5",
@@ -44,6 +45,7 @@
         "@radix-ui/react-tooltip": "^1.2.7",
         "@react-three/drei": "^10.4.4",
         "@react-three/fiber": "^9.0.0-alpha.8",
+        "@shopify/shopify-api": "^12.1.2",
         "@tabler/icons-react": "^3.35.0",
         "@tailwindcss/typography": "^0.5.19",
         "@tsparticles/engine": "^3.8.1",
@@ -121,7 +123,7 @@
         "tw-animate-css": "^1.4.0",
         "typescript": "^5"
     },
-    "description": "A complete, production-ready SaaS chatbot platform inspired by Tidio/Lyro, built with Next.js 15, TypeScript, Turso (SQLite), and better-auth.",
+    "description": "A complete, production-ready SaaS chatbot platform inspired by Tidio/Tsukai, built with Next.js 15, TypeScript, Turso (SQLite), and better-auth.",
     "main": "index.js",
     "repository": {
         "type": "git",
@@ -130,7 +132,6 @@
     "keywords": [],
     "author": "",
     "license": "ISC",
-    "type": "commonjs",
     "bugs": {
         "url": "https://github.com/Steeezzy/forefrontagent-website-clone/issues"
     },

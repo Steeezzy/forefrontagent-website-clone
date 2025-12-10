@@ -1,0 +1,445 @@
+{
+    "name": "Instagram DM - Fixed",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "instagram",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "webhook",
+            "name": "Instagram Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1.1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $json.entry?.[0]?.messaging }}",
+                            "operation": "isNotEmpty"
+                        }
+                    ]
+                }
+            },
+            "id": "filter",
+            "name": "Filter Messages",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const entry = $input.item.json.entry?.[0];\nconst messaging = entry?.messaging?.[0];\n\nif (!messaging || !messaging.message) return [];\n\nreturn {\n  senderId: messaging.sender.id,\n  messageText: messaging.message.text || '',\n  isStoryReply: messaging.message.is_story_reply || false,\n  timestamp: messaging.timestamp\n};"
+            },
+            "id": "parse",
+            "name": "Parse Message",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                680,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "=https://graph.facebook.com/v18.0/{{ $json.senderId }}?fields=name,username&access_token={{ $env.INSTAGRAM_ACCESS_TOKEN }}",
+                "options": {}
+            },
+            "id": "profile",
+            "name": "Get Profile",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                900,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.TURSO_DATABASE_URL }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $env.TURSO_AUTH_TOKEN }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "statements",
+                            "value": "=[{\"q\": \"INSERT INTO conversations (bot_id, channel, channel_user_id, channel_username, status, created_at, updated_at) VALUES (1, 'instagram', '{{ $json.senderId }}', '{{ $json.username }}', 'active', datetime('now'), datetime('now')) ON CONFLICT(bot_id, channel_user_id) DO UPDATE SET updated_at = datetime('now') RETURNING id\"}]"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "create-conv",
+            "name": "Create Conversation",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1120,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const conversationId = $input.item.json.results?.[0]?.rows?.[0]?.[0];\nreturn { ...$input.item.json, conversationId };"
+            },
+            "id": "extract-conv",
+            "name": "Extract Conv ID",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1340,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.TURSO_DATABASE_URL }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $env.TURSO_AUTH_TOKEN }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "statements",
+                            "value": "=[{\"q\": \"INSERT INTO messages (conversation_id, role, content, created_at) VALUES ({{ $json.conversationId }}, 'user', '{{ $json.messageText }}', datetime('now'))\"}]"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "save-user",
+            "name": "Save User Message",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1560,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{ $env.GOOGLE_GEMINI_API_KEY }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "contents",
+                            "value": "=[{\"parts\": [{\"text\": \"You are a friendly Instagram chatbot. {{ $json.isStoryReply ? 'User replied to your story.' : '' }} Keep it casual and use emojis. User: {{ $json.messageText }}\"}]}]"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "ai",
+            "name": "Generate Response",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1780,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || 'Hey! Sorry, I couldn\\'t process that 😅';\nreturn { ...$input.item.json, aiResponse: response };"
+            },
+            "id": "extract-ai",
+            "name": "Extract AI",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2000,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.TURSO_DATABASE_URL }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $env.TURSO_AUTH_TOKEN }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "statements",
+                            "value": "=[{\"q\": \"INSERT INTO messages (conversation_id, role, content, created_at) VALUES ({{ $json.conversationId }}, 'assistant', '{{ $json.aiResponse }}', datetime('now'))\"}]"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "save-ai",
+            "name": "Save AI Message",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                2220,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://graph.facebook.com/v18.0/me/messages?access_token={{ $env.INSTAGRAM_ACCESS_TOKEN }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "recipient",
+                            "value": "={{ {id: $json.senderId} }}"
+                        },
+                        {
+                            "name": "message",
+                            "value": "={{ {text: $json.aiResponse} }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "send",
+            "name": "Send Reply",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                2440,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ {success: true} }}",
+                "options": {}
+            },
+            "id": "response",
+            "name": "Webhook Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2660,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "text",
+                "responseBody": "={{ $json['hub.challenge'] || 'OK' }}",
+                "options": {}
+            },
+            "id": "verification",
+            "name": "Verification",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                680,
+                440
+            ]
+        }
+    ],
+    "connections": {
+        "Instagram Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Messages",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Messages": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Message",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Verification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Message": {
+            "main": [
+                [
+                    {
+                        "node": "Get Profile",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Profile": {
+            "main": [
+                [
+                    {
+                        "node": "Create Conversation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Conversation": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Conv ID",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Conv ID": {
+            "main": [
+                [
+                    {
+                        "node": "Save User Message",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save User Message": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Response": {
+            "main": [
+                [
+                    {
+                        "node": "Extract AI",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract AI": {
+            "main": [
+                [
+                    {
+                        "node": "Save AI Message",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save AI Message": {
+            "main": [
+                [
+                    {
+                        "node": "Send Reply",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send Reply": {
+            "main": [
+                [
+                    {
+                        "node": "Webhook Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2025-12-07T09:27:00.000Z",
+    "versionId": "1"
+}

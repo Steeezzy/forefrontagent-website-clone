@@ -1,0 +1,431 @@
+{
+    "name": "WhatsApp Business - Fixed",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "whatsapp",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "webhook",
+            "name": "WhatsApp Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1.1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $json.entry?.[0]?.changes?.[0]?.value?.messages }}",
+                            "operation": "isNotEmpty"
+                        }
+                    ]
+                }
+            },
+            "id": "filter",
+            "name": "Filter Messages Only",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const entry = $input.item.json.entry?.[0];\nconst change = entry?.changes?.[0];\nconst message = change?.value?.messages?.[0];\nconst contact = change?.value?.contacts?.[0];\n\nif (!message) return [];\n\nreturn {\n  messageId: message.id,\n  from: message.from,\n  messageText: message.text?.body || '',\n  contactName: contact?.profile?.name || 'Unknown',\n  phoneNumberId: change?.value?.metadata?.phone_number_id,\n  timestamp: message.timestamp\n};"
+            },
+            "id": "parse",
+            "name": "Parse Message",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                680,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.TURSO_DATABASE_URL }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $env.TURSO_AUTH_TOKEN }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "statements",
+                            "value": "=[{\"q\": \"INSERT INTO conversations (bot_id, channel, channel_user_id, channel_username, status, created_at, updated_at) VALUES (1, 'whatsapp', '{{ $json.from }}', '{{ $json.contactName }}', 'active', datetime('now'), datetime('now')) ON CONFLICT(bot_id, channel_user_id) DO UPDATE SET updated_at = datetime('now') RETURNING id\"}]"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "create-conv",
+            "name": "Create Conversation",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                900,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const conversationId = $input.item.json.results?.[0]?.rows?.[0]?.[0];\nreturn { ...$input.item.json, conversationId };"
+            },
+            "id": "extract-conv",
+            "name": "Extract Conv ID",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1120,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.TURSO_DATABASE_URL }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $env.TURSO_AUTH_TOKEN }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "statements",
+                            "value": "=[{\"q\": \"INSERT INTO messages (conversation_id, role, content, created_at) VALUES ({{ $json.conversationId }}, 'user', '{{ $json.messageText }}', datetime('now'))\"}]"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "save-user",
+            "name": "Save User Message",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1340,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{ $env.GOOGLE_GEMINI_API_KEY }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "contents",
+                            "value": "=[{\"parts\": [{\"text\": \"You are a helpful WhatsApp customer service bot. Keep responses brief and friendly. User: {{ $json.messageText }}\"}]}]"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "ai",
+            "name": "Generate AI Response",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1560,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not help with that.';\nreturn { ...$input.item.json, aiResponse: response };"
+            },
+            "id": "extract-ai",
+            "name": "Extract AI Text",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1780,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.TURSO_DATABASE_URL }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $env.TURSO_AUTH_TOKEN }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "statements",
+                            "value": "=[{\"q\": \"INSERT INTO messages (conversation_id, role, content, created_at) VALUES ({{ $json.conversationId }}, 'assistant', '{{ $json.aiResponse }}', datetime('now'))\"}]"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "save-ai",
+            "name": "Save AI Message",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                2000,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://graph.facebook.com/v18.0/{{ $json.phoneNumberId }}/messages",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "messaging_product",
+                            "value": "whatsapp"
+                        },
+                        {
+                            "name": "to",
+                            "value": "={{ $json.from }}"
+                        },
+                        {
+                            "name": "type",
+                            "value": "text"
+                        },
+                        {
+                            "name": "text",
+                            "value": "={{ {body: $json.aiResponse} }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "send",
+            "name": "Send WhatsApp Reply",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                2220,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ {success: true} }}",
+                "options": {}
+            },
+            "id": "response",
+            "name": "Webhook Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2440,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "text",
+                "responseBody": "={{ $json['hub.challenge'] || 'OK' }}",
+                "options": {}
+            },
+            "id": "verification",
+            "name": "Verification",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                680,
+                440
+            ]
+        }
+    ],
+    "connections": {
+        "WhatsApp Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Messages Only",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Messages Only": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Message",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Verification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Message": {
+            "main": [
+                [
+                    {
+                        "node": "Create Conversation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Conversation": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Conv ID",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Conv ID": {
+            "main": [
+                [
+                    {
+                        "node": "Save User Message",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save User Message": {
+            "main": [
+                [
+                    {
+                        "node": "Generate AI Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate AI Response": {
+            "main": [
+                [
+                    {
+                        "node": "Extract AI Text",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract AI Text": {
+            "main": [
+                [
+                    {
+                        "node": "Save AI Message",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save AI Message": {
+            "main": [
+                [
+                    {
+                        "node": "Send WhatsApp Reply",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send WhatsApp Reply": {
+            "main": [
+                [
+                    {
+                        "node": "Webhook Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2025-12-07T09:27:00.000Z",
+    "versionId": "1"
+}

@@ -10,7 +10,7 @@ export const users = sqliteTable('users', {
 
 export const bots = sqliteTable('bots', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  ownerId: integer('owner_id').notNull().references(() => users.id),
+  ownerId: text('owner_id').notNull().references(() => user.id),
   name: text('name').notNull(),
   domain: text('domain'),
   settings: text('settings', { mode: 'json' }).default('{}'),
@@ -49,7 +49,7 @@ export const flows = sqliteTable('flows', {
 export const conversations = sqliteTable('conversations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   botId: integer('bot_id').notNull().references(() => bots.id),
-  userId: integer('user_id').references(() => users.id),
+  userId: text('user_id').references(() => user.id),
   sessionId: text('session_id'),
   metadata: text('metadata', { mode: 'json' }).default('{}'),
   createdAt: text('created_at').notNull(),

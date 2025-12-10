@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
-import { BarChart3, TrendingUp, MessageSquare, DollarSign, Zap } from "lucide-react";
+import { CircleHelp, ChartBar, TrendingUp } from "lucide-react";
 import {
     AreaChart,
     Area,
@@ -10,9 +10,7 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer,
-    BarChart,
-    Bar
+    ResponsiveContainer
 } from "recharts";
 
 interface BotType {
@@ -20,38 +18,17 @@ interface BotType {
     name: string;
 }
 
-interface UsageRecord {
-    date: string;
-    tokens: number;
-    cost: string;
-}
-
-interface UsageData {
-    records: UsageRecord[];
-    totals: {
-        totalTokens: number;
-        totalCost: string;
-    };
-}
-
 export default function AnalyticsPage() {
     const { data: session } = useSession();
     const [bots, setBots] = useState<BotType[]>([]);
     const [selectedBot, setSelectedBot] = useState<BotType | null>(null);
-    const [usageData, setUsageData] = useState<UsageData | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [dateRange, setDateRange] = useState("01 Nov 2025 - 30 Nov 2025");
 
     useEffect(() => {
         if (session?.user) {
             fetchBots();
         }
     }, [session]);
-
-    useEffect(() => {
-        if (selectedBot) {
-            fetchUsage();
-        }
-    }, [selectedBot]);
 
     const fetchBots = async () => {
         try {
@@ -69,190 +46,148 @@ export default function AnalyticsPage() {
         }
     };
 
-    const fetchUsage = async () => {
-        if (!selectedBot) return;
-        setIsLoading(true);
-        try {
-            const token = localStorage.getItem("bearer_token");
-            const res = await fetch(`/api/bots/${selectedBot.id}/usage?limit=30`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = await res.json();
-            setUsageData(data);
-        } catch (error) {
-            console.error("Failed to fetch usage", error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Process data for charts (reverse to show chronological order)
-    const chartData = usageData?.records ? [...usageData.records].reverse() : [];
+    // Placeholder data for the chart
+    const data = [
+        { name: 'Nov 1', value: 0 },
+        { name: 'Nov 5', value: 0 },
+        { name: 'Nov 9', value: 0 },
+        { name: 'Nov 13', value: 0 },
+        { name: 'Nov 17', value: 0 },
+        { name: 'Nov 21', value: 0 },
+        { name: 'Nov 25', value: 0 },
+        { name: 'Nov 29', value: 0 },
+    ];
 
     return (
-        <div className="p-8 max-w-6xl mx-auto">
+        <div className="p-8 max-w-[1600px] mx-auto bg-gray-50 min-h-screen">
             <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h1 className="text-3xl font-bold text-[#001B38] mb-2">Analytics</h1>
-                    <p className="text-gray-600">Monitor your AI agent's performance and usage</p>
+                <div className="flex items-center gap-3">
+                    <h1 className="text-2xl font-bold text-[#001B38]">Analytics</h1>
+                    <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wide">Paid</span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500">Active Bot:</span>
-                    <select
-                        className="border border-gray-300 rounded-lg px-3 py-2 bg-white text-sm font-medium"
-                        value={selectedBot?.id}
-                        onChange={(e) => {
-                            const bot = bots.find(b => b.id === parseInt(e.target.value));
-                            setSelectedBot(bot || null);
-                        }}
-                    >
-                        {bots.map(bot => (
-                            <option key={bot.id} value={bot.id}>{bot.name}</option>
-                        ))}
-                    </select>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <div className="w-5 h-5 rounded-full border-2 border-blue-600 flex items-center justify-center text-[10px] font-bold text-blue-600">5</div>
+                        <span>days left in your full-featured trial</span>
+                    </div>
+                    <button className="bg-[#22c55e] hover:bg-[#16a34a] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        Upgrade
+                    </button>
                 </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 bg-blue-100 rounded-lg">
-                            <Zap className="h-6 w-6 text-blue-600" />
+            <div className="mb-8">
+                <h2 className="text-xl font-bold text-[#001B38] mb-6">Overview</h2>
+
+                <div className="mb-6">
+                    <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                        <span className="text-gray-500">📅</span> {dateRange}
+                    </button>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-4 divide-x divide-gray-100 border-b border-gray-100">
+                        <div className="p-6 relative group cursor-pointer hover:bg-gray-50 transition-colors border-b-2 border-blue-600">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium text-blue-600">Interactions</span>
+                                <CircleHelp className="w-3 h-3 text-gray-400" />
+                            </div>
+                            <div className="text-3xl font-bold text-[#001B38]">0</div>
                         </div>
-                        <span className="text-xs font-medium px-2 py-1 bg-green-100 text-green-700 rounded-full flex items-center gap-1">
-                            <TrendingUp className="h-3 w-3" /> +12%
-                        </span>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900 mb-1">
-                        {usageData?.totals.totalTokens.toLocaleString() || 0}
-                    </p>
-                    <p className="text-sm text-gray-600">Total Tokens Used</p>
-                </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 bg-green-100 rounded-lg">
-                            <DollarSign className="h-6 w-6 text-green-600" />
+                        <div className="p-6 relative group cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium text-gray-600">Tsukai AI Agent resolution rate</span>
+                                <CircleHelp className="w-3 h-3 text-gray-400" />
+                            </div>
+                            <div className="text-3xl font-bold text-[#001B38]">0%</div>
+                        </div>
+
+                        <div className="p-6 relative group cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium text-gray-600">Sales assisted</span>
+                                <CircleHelp className="w-3 h-3 text-gray-400" />
+                            </div>
+                            <div className="text-3xl font-bold text-[#001B38]">0</div>
+                        </div>
+
+                        <div className="p-6 relative group cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium text-gray-600">Leads acquired</span>
+                                <CircleHelp className="w-3 h-3 text-gray-400" />
+                            </div>
+                            <div className="text-3xl font-bold text-[#001B38]">0</div>
                         </div>
                     </div>
-                    <p className="text-2xl font-bold text-gray-900 mb-1">
-                        ${parseFloat(usageData?.totals.totalCost || "0").toFixed(4)}
-                    </p>
-                    <p className="text-sm text-gray-600">Estimated Cost</p>
-                </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 bg-purple-100 rounded-lg">
-                            <MessageSquare className="h-6 w-6 text-purple-600" />
+                    {/* Chart Legend */}
+                    <div className="px-6 py-4 flex items-center gap-6 border-b border-gray-50">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+                            <span className="text-xs text-gray-500">Replied live conversations</span>
+                            <CircleHelp className="w-3 h-3 text-gray-300" />
+                            <span className="text-sm font-medium text-[#001B38] ml-1">0</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-orange-400"></div>
+                            <span className="text-xs text-gray-500">Replied tickets</span>
+                            <CircleHelp className="w-3 h-3 text-gray-300" />
+                            <span className="text-sm font-medium text-[#001B38] ml-1">0</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                            <span className="text-xs text-gray-500">Flows interactions</span>
+                            <CircleHelp className="w-3 h-3 text-gray-300" />
+                            <span className="text-sm font-medium text-[#001B38] ml-1">0</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-pink-500"></div>
+                            <span className="text-xs text-gray-500">Tsukai AI Agent conversations</span>
+                            <CircleHelp className="w-3 h-3 text-gray-300" />
+                            <span className="text-sm font-medium text-[#001B38] ml-1">0</span>
+                        </div>
+
+                        <div className="ml-auto flex items-center gap-2">
+                            <button className="p-1.5 bg-blue-100 text-blue-600 rounded">
+                                <ChartBar className="w-4 h-4" />
+                            </button>
+                            <button className="p-1.5 text-gray-400 hover:bg-gray-100 rounded">
+                                <TrendingUp className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
-                    <p className="text-2xl font-bold text-gray-900 mb-1">
-                        {/* Placeholder for conversation count if not available in usage */}
-                        -
-                    </p>
-                    <p className="text-sm text-gray-600">Total Conversations</p>
-                </div>
-            </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Token Usage Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <h3 className="text-lg font-bold text-gray-900 mb-6">Token Usage (Last 30 Days)</h3>
-                    <div className="h-[300px] w-full">
-                        {isLoading ? (
-                            <div className="h-full flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                            </div>
-                        ) : chartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={chartData}>
-                                    <defs>
-                                        <linearGradient id="colorTokens" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                    <XAxis
-                                        dataKey="date"
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fontSize: 12, fill: '#6b7280' }}
-                                        tickFormatter={(value) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                    />
-                                    <YAxis
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fontSize: 12, fill: '#6b7280' }}
-                                    />
-                                    <Tooltip
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    />
-                                    <Area
-                                        type="monotone"
-                                        dataKey="tokens"
-                                        stroke="#3b82f6"
-                                        strokeWidth={2}
-                                        fillOpacity={1}
-                                        fill="url(#colorTokens)"
-                                    />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                                <BarChart3 className="h-12 w-12 mb-2 opacity-20" />
-                                <p>No data available</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Cost Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <h3 className="text-lg font-bold text-gray-900 mb-6">Daily Cost (Last 30 Days)</h3>
-                    <div className="h-[300px] w-full">
-                        {isLoading ? (
-                            <div className="h-full flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-                            </div>
-                        ) : chartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={chartData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                    <XAxis
-                                        dataKey="date"
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fontSize: 12, fill: '#6b7280' }}
-                                        tickFormatter={(value) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                    />
-                                    <YAxis
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fontSize: 12, fill: '#6b7280' }}
-                                        tickFormatter={(value) => `$${value}`}
-                                    />
-                                    <Tooltip
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                        formatter={(value: any) => [`$${value}`, "Cost"]}
-                                    />
-                                    <Bar
-                                        dataKey="cost"
-                                        fill="#22c55e"
-                                        radius={[4, 4, 0, 0]}
-                                    />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                                <BarChart3 className="h-12 w-12 mb-2 opacity-20" />
-                                <p>No data available</p>
-                            </div>
-                        )}
+                    {/* Chart Area */}
+                    <div className="h-[400px] w-full p-6">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={data}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                                <XAxis
+                                    dataKey="name"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fontSize: 12, fill: '#9ca3af' }}
+                                    dy={10}
+                                />
+                                <YAxis
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fontSize: 12, fill: '#9ca3af' }}
+                                    domain={[0, 10]}
+                                    ticks={[0, 2, 4, 6, 8, 10]}
+                                />
+                                <Tooltip />
+                                <Area
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke="#3b82f6"
+                                    fill="#3b82f6"
+                                    fillOpacity={0.1}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>

@@ -1,6 +1,6 @@
 # ForefrontAgent - AI Customer Service Platform
 
-A complete, production-ready SaaS chatbot platform inspired by Tidio/Lyro, built with Next.js 15, TypeScript, Turso (SQLite), and better-auth.
+A complete, production-ready SaaS chatbot platform inspired by Tidio/Tsukai, built with Next.js 15, TypeScript, Turso (SQLite), and better-auth.
 
 ## 🚀 What's Been Built
 
